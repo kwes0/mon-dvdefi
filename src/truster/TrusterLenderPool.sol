@@ -25,10 +25,11 @@ contract TrusterLenderPool is ReentrancyGuard {
         uint256 balanceBefore = token.balanceOf(address(this));
 
         token.transfer(borrower, amount);
+        // @note This is a n open external low-lwvl call. 
         target.functionCall(data);
 
         if (token.balanceOf(address(this)) < balanceBefore) {
-            revert RepayFailed();
+            revert RepayFailed(); //If the balancenow is less than before, the loan did not occur. It was reverted.
         }
 
         return true;

